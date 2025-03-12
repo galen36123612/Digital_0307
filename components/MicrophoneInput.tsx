@@ -225,7 +225,7 @@ export default function MicrophoneInput({
 
   return (
     <div className="flex flex-col gap-2 w-full">
-      {/* 語言選擇器 (左右箭頭) */}
+      {// 語言選擇器 (左右箭頭) }
       <div className="flex items-center justify-between bg-gray-800 rounded-md border border-gray-700 p-2">
         <button 
           onClick={prevLanguage}
@@ -248,7 +248,7 @@ export default function MicrophoneInput({
         </button>
       </div>
       
-      {/* 麥克風按鈕 */}
+      {// 麥克風按鈕 }
       <button
         className="w-full p-1 flex flex-row justify-center bg-default-100 items-center gap-4 overflow-hidden color-inherit subpixel-antialiased rounded-md bg-background/10 backdrop-blur backdrop-saturate-150"
         onClick={play ? handlerStop : startPlay}
@@ -257,7 +257,7 @@ export default function MicrophoneInput({
         <Wave play={play} />
       </button>
       
-      {/* 顯示當前識別內容 */}
+      {// 顯示當前識別內容 }
       {currentText && (
         <div className="text-sm mt-1 px-2 py-1 bg-gray-700/30 rounded">
           {currentText}
