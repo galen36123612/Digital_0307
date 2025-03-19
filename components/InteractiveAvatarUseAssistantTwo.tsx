@@ -15,9 +15,9 @@ import MicrophoneInput, { MicrophoneStatus } from "./MicrophoneInput";
 import { PauseCircle } from "@phosphor-icons/react/dist/ssr";
 
 //60439e8c0fe7428bb9b6c41772258a6b
-const avatarId = "ed51e110ff96491c8595cf9c9c3f6d61"; //'Angela-insuit-20220820';
+const avatarId = "38e8e9baf95e4ce48d3371fbc3032945"; //'Angela-insuit-20220820';
 //const avatarId = "52f3786c8c9543248a5cfcddad53813a"
-const voiceId = "45350457fa7248e081ca2cb64dec5e9f";
+const voiceId = "ed2858c05f264dd19aa00a89a8d05b43";
 
 export default function InteractiveAvatar() {
   const [isLoadingSession, setIsLoadingSession] = useState(false);
