@@ -1,4 +1,4 @@
-import { Message } from "ai/react";
+/*import { Message } from "ai/react";
 import { useEffect, useRef } from "react";
 interface MessageListProps {
   messages: Message[];
@@ -23,9 +23,9 @@ export default function MessageList({ messages }: MessageListProps) {
       ))}
     </div>
   );
-}
+}*/
 
-/*import { Message } from "ai/react";
+import { Message } from "ai/react";
 import { useEffect, useRef, useState } from "react";
 
 interface MessageListProps {
@@ -87,7 +87,7 @@ export default function MessageList({ messages }: MessageListProps) {
       ))}
     </div>
   );
-}*/
+}
 
 
 
