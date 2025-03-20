@@ -401,7 +401,7 @@ export default function InteractiveAvatar() {
                    <div className="w-full h-full flex items-center justify-center"> 
                   <StopCircle fontSize={64} /> 
                     </div>
-                  </Button>/*到這行結束*/
+                  </Button>
               </div> :
               <MicrophoneInput
                 contentChange={(content) => {
