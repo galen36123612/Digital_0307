@@ -388,19 +388,20 @@ export default function InteractiveAvatar() {
                 <Button
                   // size="lg"
                   radius="full"
-                  className="bg-danger-500 ml-10 h-16 w-16 absolute bottom-0 touch-manipulation" // 這行開始改0320
+                  /* 這行開始改0320*/
+                  className="bg-danger-500 ml-10 h-16 w-16 absolute bottom-0 touch-manipulation" 
                   isIconOnly
-                  onClick={() => handleInterrupt()} //還有這行
-                      style={{  //還有這行
-                      touchAction: "manipulation", //還有這行
-                      WebkitTapHighlightColor: "transparent", //還有這行
-                      cursor: "pointer" //還有這行
-                        }} //還有這行
-                  >//還有這行
-                   <div className="w-full h-full flex items-center justify-center"> //還有這行
-                  <StopCircle fontSize={64} /> //原本80
+                  onClick={() => handleInterrupt()}
+                      style={{  
+                      touchAction: "manipulation",
+                      WebkitTapHighlightColor: "transparent", 
+                      cursor: "pointer" 
+                        }} 
+                  >
+                   <div className="w-full h-full flex items-center justify-center"> 
+                  <StopCircle fontSize={64} /> 
                     </div>
-                  </Button>
+                  </Button>/*到這行結束*/
               </div> :
               <MicrophoneInput
                 contentChange={(content) => {
