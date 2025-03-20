@@ -389,7 +389,7 @@ export default function InteractiveAvatar() {
                   // size="lg"
                   radius="full"
                   className="bg-danger-500 ml-10 h-16 w-16 absolute bottom-0 touch-manipulation" // 這行開始改0320
-                  isIconOnly>
+                  isIconOnly
                   onClick={() => handleInterrupt()} //還有這行
                       style={{  //還有這行
                       touchAction: "manipulation", //還有這行
