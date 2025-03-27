@@ -15,7 +15,7 @@ const openai = new OpenAI({
 });
 // const threadId = "thread_sfA5cNxkABXZmgvcL6AYjoVQ";
 
-const instructions = `If the user inputs text in Cantonese, respond in Cantonese using Traditional Chinese characters. If the input is in another language, respond in that language accordingly.
+const instructions = `If the user inputs text in Cantonese, respond in Cantonese using Traditional Chinese characters. If the user inputs text in English, respond in English using english characters. If the input is in another language, respond in that language accordingly.
 
 Your updated Topic Detection Rules would now include:
 
