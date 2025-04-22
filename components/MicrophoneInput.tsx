@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+// this is origonal version
+/*import { useRef, useState } from "react";
 
 import Wave from "./Wave";
 import { Microphone } from "@phosphor-icons/react";
@@ -84,7 +85,7 @@ export default function MicrophoneInput({
       <Wave play={play} />
     </button>
   );
-}
+}*/
 
 // 0311 多國語言測試
 /*import { useRef, useState, useEffect } from "react";
@@ -267,3 +268,193 @@ export default function MicrophoneInput({
   );
 }*/
 
+// 0422 micorphone for android 
+import { useRef, useState, useEffect } from "react";
+import Wave from "./Wave";
+import { Microphone } from "@phosphor-icons/react";
+
+export enum MicrophoneStatus {
+  Listening,
+  stopListening
+}
+
+interface MicrophoneInputProps {
+  talking: boolean;
+  contentChange?: (content: string) => void;
+  onSubmit?: (content: string) => void;
+  onStopPlay?: () => void;
+  onStatusChange?: (status: MicrophoneStatus) => void;
+}
+
+export default function MicrophoneInput({
+  talking = false,
+  contentChange,
+  onSubmit,
+  onStopPlay,
+  onStatusChange
+}: MicrophoneInputProps) {
+  const firstflag = useRef(true);
+  let recognition = useRef<any>(null);
+  const [play, setPlay] = useState<boolean>(false);
+  const [isSupported, setIsSupported] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string>("");
+
+  // 检查浏览器兼容性
+  useEffect(() => {
+    checkBrowserSupport();
+  }, []);
+
+  const checkBrowserSupport = () => {
+    const SpeechRecognition = 
+      window.SpeechRecognition || 
+      window.webkitSpeechRecognition || 
+      window.mozSpeechRecognition || 
+      window.msSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      setIsSupported(false);
+      setErrorMessage("您的设备不支持语音识别功能");
+      console.error("Speech Recognition API not supported in this browser");
+    }
+  };
+
+  const handlerStop = () => {
+    if (recognition.current) {
+      try {
+        recognition.current.stop();
+      } catch (e) {
+        console.error("Failed to stop recognition:", e);
+      }
+    }
+    setPlay(false);
+    onStopPlay && onStopPlay();
+  };
+
+  const startPlay = () => {
+    if (play || !isSupported) return;
+
+    try {
+      const SpeechRecognition = 
+        window.SpeechRecognition || 
+        window.webkitSpeechRecognition || 
+        window.mozSpeechRecognition || 
+        window.msSpeechRecognition;
+      
+      if (!SpeechRecognition) {
+        setErrorMessage("您的设备不支持语音识别功能");
+        return;
+      }
+
+      recognition.current = new SpeechRecognition();
+      
+      // 检测设备类型和默认语言
+      const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      const isAndroid = /android/i.test(userAgent);
+      
+      recognition.current.continuous = true;
+      // 根据设备设置不同的语言代码
+      recognition.current.lang = isAndroid ? "zh-CN" : "zh"; // Android 通常需要具体的地区代码
+      recognition.current.interimResults = true;
+      recognition.current.maxAlternatives = 1;
+      
+      // 增加超时处理
+      let timeoutId: ReturnType<typeof setTimeout>;
+      
+      recognition.current.onresult = function (event: any) {
+        if (event.results.length > 0) {
+          const item = event.results[0];
+          console.info(
+            "Result received: " + item[0].transcript + " ." + item[0].confidence,
+          );
+          // 清除之前的超时
+          if (timeoutId) clearTimeout(timeoutId);
+          
+          contentChange && contentChange(item[0].transcript);
+          if (item.isFinal) {
+            try {
+              recognition.current?.stop();
+            } catch (e) {
+              console.error("Error stopping recognition:", e);
+            }
+            onSubmit && onSubmit(item[0].transcript);
+          }
+        }
+      };
+      
+      recognition.current.onstart = function () {
+        console.log("Speech recognition started");
+        onStatusChange && onStatusChange(MicrophoneStatus.Listening);
+        
+        // 设置超时以防止无限等待
+        timeoutId = setTimeout(() => {
+          console.log("Speech recognition timeout");
+          try {
+            recognition.current?.stop();
+          } catch (e) {
+            console.error("Error stopping recognition on timeout:", e);
+          }
+        }, 10000); // 10秒超时
+      };
+      
+      recognition.current.onend = function () {
+        setPlay(false);
+        console.log("Speech recognition ended");
+        onStatusChange && onStatusChange(MicrophoneStatus.stopListening);
+        
+        // 清除超时
+        if (timeoutId) clearTimeout(timeoutId);
+      };
+      
+      recognition.current.onspeechend = function () {
+        try {
+          recognition.current?.stop();
+        } catch (e) {
+          console.error("Error on speech end:", e);
+        }
+      };
+      
+      recognition.current.onerror = function (event: any) {
+        console.error("Error occurred in recognition: ", event.error);
+        setErrorMessage(`语音识别错误: ${event.error}`);
+        setPlay(false);
+        
+        // 清除超时
+        if (timeoutId) clearTimeout(timeoutId);
+      };
+      
+      recognition.current.start();
+      setPlay(true);
+      setErrorMessage("");
+    } catch (error) {
+      console.error("Failed to start speech recognition:", error);
+      setErrorMessage("启动语音识别失败，请检查浏览器权限设置");
+      setPlay(false);
+    }
+  };
+
+  return (
+    <div className="w-full flex flex-col items-center">
+      <button
+        className="w-full p-1 flex flex-row justify-center bg-default-100 items-center gap-4 overflow-hidden color-inherit subpixel-antialiased rounded-md bg-background/10 backdrop-blur backdrop-saturate-150"
+        onClick={startPlay}
+        disabled={!isSupported}
+      >
+        <Microphone fontSize={28} color={play ? "#1f94ea" : (isSupported ? "white" : "#888888")} />
+        <Wave play={play} />
+      </button>
+      {errorMessage && (
+        <p className="text-red-500 text-xs mt-1">{errorMessage}</p>
+      )}
+    </div>
+  );
+}
+
+// 为 TypeScript 添加全局声明
+declare global {
+  interface Window {
+    SpeechRecognition?: any;
+    webkitSpeechRecognition?: any;
+    mozSpeechRecognition?: any;
+    msSpeechRecognition?: any;
+  }
+}
