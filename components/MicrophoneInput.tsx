@@ -496,8 +496,8 @@ export default function MicrophoneInput({
   );
 }*/
 
-// 0422 Grok android
-import { useRef, useState } from "react";
+// 0422 Grok android -> android 可以聽, 沒有STT, ios沒有權限
+/*import { useRef, useState } from "react";
 import Wave from "./Wave";
 import { Microphone } from "@phosphor-icons/react";
 
@@ -628,6 +628,177 @@ export default function MicrophoneInput({
   const stopPlay = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
+      setPlay(false);
+      onStopPlay?.();
+    }
+  };
+
+  return (
+    <div className="w-full">
+      <button
+        className="w-full p-1 flex flex-row justify-center bg-default-100 items-center gap-4 overflow-hidden color-inherit subpixel-antialiased rounded-md bg-background/10 backdrop-blur backdrop-saturate-150"
+        onClick={play ? stopPlay : startPlay}
+        disabled={!SpeechRecognition}
+      >
+        <Microphone fontSize={28} color={play ? "#1f94ea" : "white"} />
+        <Wave play={play} />
+      </button>
+      {error && (
+        <p className="text-red-500 text-sm mt-2 text-center">{error}</p>
+      )}
+    </div>
+  );
+}*/
+
+// 0422 grok V2 android STT, ios?
+import { useRef, useState } from "react";
+import Wave from "./Wave";
+import { Microphone } from "@phosphor-icons/react";
+
+export enum MicrophoneStatus {
+  Listening,
+  StopListening,
+  Error, // Added for error handling
+}
+
+interface MicrophoneInputProps {
+  talking: boolean;
+  contentChange?: (content: string) => void;
+  onSubmit?: (content: string) => void;
+  onStopPlay?: () => void;
+  onStatusChange?: (status: MicrophoneStatus) => void;
+}
+
+const SpeechRecognition =
+  globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
+
+export default function MicrophoneInput({
+  talking = false,
+  contentChange,
+  onSubmit,
+  onStopPlay,
+  onStatusChange,
+}: MicrophoneInputProps) {
+  const recognition = useRef<SpeechRecognition | null>(null);
+  const [play, setPlay] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Request microphone permission
+  const requestMicrophonePermission = async (): Promise<boolean> => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      return true;
+    } catch (err) {
+      console.error("Microphone permission error:", err);
+      if (err instanceof DOMException) {
+        if (err.name === "NotAllowedError") {
+          setError("請授予麥克風權限以使用語音識別");
+        } else if (err.name === "NotFoundError") {
+          setError("未找到麥克風設備");
+        } else {
+          setError("無法訪問麥克風，請檢查設備設定");
+        }
+      } else {
+        setError("無法訪問麥克風，請稍後重試");
+      }
+      onStatusChange?.(MicrophoneStatus.Error);
+      return false;
+    }
+  };
+
+  const startPlay = async () => {
+    if (play) return;
+    if (!SpeechRecognition) {
+      setError("您的瀏覽器不支援語音識別功能");
+      onStatusChange?.(MicrophoneStatus.Error);
+      return;
+    }
+
+    // Request permission
+    const hasPermission = await requestMicrophonePermission();
+    if (!hasPermission) {
+      return;
+    }
+
+    try {
+      recognition.current = new SpeechRecognition();
+      recognition.current.continuous = false; // Set to false for better Android stability
+      recognition.current.lang = "zh-CN"; // Use zh-CN for Android compatibility
+      recognition.current.interimResults = true; // Show partial results
+      recognition.current.maxAlternatives = 1;
+
+      recognition.current.onresult = (event) => {
+        const item = event.results[0];
+        const transcript = item[0].transcript;
+        const confidence = item[0].confidence;
+        console.info(`Transcript: ${transcript}, Confidence: ${confidence}`);
+        // Ensure contentChange is called with the latest transcript
+        if (contentChange) {
+          contentChange(transcript);
+          console.log("contentChange called with:", transcript);
+        }
+        if (item.isFinal) {
+          console.log("Final result, stopping recognition");
+          recognition.current?.stop();
+          if (onSubmit) {
+            onSubmit(transcript);
+            console.log("onSubmit called with:", transcript);
+          }
+        }
+      };
+
+      recognition.current.onstart = () => {
+        console.log("Speech recognition started");
+        setPlay(true);
+        setError(null);
+        if (onStatusChange) {
+          onStatusChange(MicrophoneStatus.Listening);
+          console.log("onStatusChange called with: Listening");
+        }
+      };
+
+      recognition.current.onend = () => {
+        console.log("Speech recognition ended");
+        setPlay(false);
+        if (onStatusChange) {
+          onStatusChange(MicrophoneStatus.StopListening);
+          console.log("onStatusChange called with: StopListening");
+        }
+        onStopPlay?.();
+      };
+
+      recognition.current.onspeechend = () => {
+        console.log("Speech ended, stopping recognition");
+        recognition.current?.stop();
+      };
+
+      recognition.current.onerror = (event) => {
+        console.error(`Speech recognition error: ${event.error}`);
+        setPlay(false);
+        if (event.error === "not-allowed") {
+          setError("麥克風權限被拒絕，請檢查瀏覽器設定");
+        } else if (event.error === "network") {
+          setError("網路問題，請檢查您的網路連線");
+        } else {
+          setError(`語音識別錯誤：${event.error}`);
+        }
+        onStatusChange?.(MicrophoneStatus.Error);
+      };
+
+      console.log("Starting speech recognition");
+      recognition.current.start();
+    } catch (err) {
+      console.error("Failed to start speech recognition:", err);
+      setError("無法啟動語音識別，請稍後重試");
+      onStatusChange?.(MicrophoneStatus.Error);
+    }
+  };
+
+  const stopPlay = () => {
+    if (recognition.current) {
+      console.log("Stopping speech recognition");
+      recognition.current.stop();
       setPlay(false);
       onStopPlay?.();
     }
