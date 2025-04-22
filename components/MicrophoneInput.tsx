@@ -286,9 +286,14 @@ interface MicrophoneInputProps {
   onStatusChange?: (status: MicrophoneStatus) => void;
 }
 
+// 定义类型，确保 TypeScript 能识别 SpeechRecognition
+type SpeechRecognitionType = any;
+
 // 保持原始声明方式的兼容性
-const SpeechRecognition =
-  globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
+const SpeechRecognition = 
+  (globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition) as {
+    new(): SpeechRecognitionType;
+  };
 
 export default function MicrophoneInput({
   talking = false,
@@ -298,7 +303,7 @@ export default function MicrophoneInput({
   onStatusChange
 }: MicrophoneInputProps) {
   const firstflag = useRef(true);
-  let recognition = useRef<typeof SpeechRecognition>();
+  let recognition = useRef<SpeechRecognitionType | null>(null);
   const [play, setPlay] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<string>("");
   const [isAndroid, setIsAndroid] = useState<boolean>(false);
@@ -368,7 +373,9 @@ export default function MicrophoneInput({
           // 如果不是 Android 设备，或者结果是最终结果，则提交
           if (item.isFinal && !isAndroid) {
             try {
-              recognition.current?.stop();
+              if (recognition.current) {
+                recognition.current.stop();
+              }
               onSubmit && onSubmit(currentTranscript);
             } catch (e) {
               console.error("停止识别失败:", e);
@@ -399,14 +406,16 @@ export default function MicrophoneInput({
             try {
               console.log("在 Android 设备上重新启动识别");
               recognition.current = new SpeechRecognition();
-              recognition.current.continuous = true;
-              recognition.current.lang = "zh-CN";
-              recognition.current.interimResults = true;
-              recognition.current.maxAlternatives = 1;
               
-              // 重新绑定所有事件处理器
-              const setupEvents = startPlay;
-              setupEvents();
+              if (recognition.current) {
+                recognition.current.continuous = true;
+                recognition.current.lang = "zh-CN";
+                recognition.current.interimResults = true;
+                recognition.current.maxAlternatives = 1;
+                
+                // 重新绑定所有事件处理器
+                startPlay();
+              }
             } catch (e) {
               console.error("重新启动识别失败:", e);
               setPlay(false);
@@ -421,7 +430,9 @@ export default function MicrophoneInput({
       // 这可以防止过早结束识别
       if (!isAndroid) {
         recognition.current.onspeechend = function() {
-          recognition.current!.stop();
+          if (recognition.current) {
+            recognition.current.stop();
+          }
         };
       }
       
@@ -438,8 +449,7 @@ export default function MicrophoneInput({
           
           restartTimeoutRef.current = window.setTimeout(() => {
             try {
-              const setupEvents = startPlay;
-              setupEvents();
+              startPlay();
             } catch (e) {
               console.error("重新启动识别失败:", e);
               setPlay(false);
