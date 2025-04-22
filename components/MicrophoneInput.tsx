@@ -1,5 +1,5 @@
 // this is origonal version
-import { useRef, useState } from "react";
+/*import { useRef, useState } from "react";
 
 import Wave from "./Wave";
 import { Microphone } from "@phosphor-icons/react";
@@ -85,7 +85,7 @@ export default function MicrophoneInput({
       <Wave play={play} />
     </button>
   );
-}
+}*/
 
 // 0311 多國語言測試
 /*import { useRef, useState, useEffect } from "react";
@@ -495,3 +495,140 @@ export default function MicrophoneInput({
     </div>
   );
 }*/
+
+// 0422 Grok android
+import { useRef, useState } from "react";
+import Wave from "./Wave";
+import { Microphone } from "@phosphor-icons/react";
+
+export enum MicrophoneStatus {
+  Listening,
+  StopListening,
+  Error,
+  NotSupported,
+}
+
+interface MicrophoneInputProps {
+  talking: boolean;
+  contentChange?: (content: string) => void;
+  onSubmit?: (content: string) => void;
+  onStopPlay?: () => void;
+  onStatusChange?: (status: MicrophoneStatus) => void;
+}
+
+const SpeechRecognition =
+  globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
+
+export default function MicrophoneInput({
+  talking = false,
+  contentChange,
+  onSubmit,
+  onStopPlay,
+  onStatusChange,
+}: MicrophoneInputProps) {
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const [play, setPlay] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // 檢查麥克風權限
+  const checkMicrophonePermission = async (): Promise<boolean> => {
+    try {
+      const permissionStatus = await navigator.permissions.query({ name: "microphone" });
+      return permissionStatus.state === "granted";
+    } catch {
+      return false;
+    }
+  };
+
+  const startPlay = async () => {
+    if (play) return;
+    if (!SpeechRecognition) {
+      setError("您的瀏覽器不支援語音識別功能");
+      onStatusChange?.(MicrophoneStatus.NotSupported);
+      return;
+    }
+
+    // 檢查權限
+    const hasPermission = await checkMicrophonePermission();
+    if (!hasPermission) {
+      setError("請授予麥克風權限以使用語音識別");
+      onStatusChange?.(MicrophoneStatus.Error);
+      return;
+    }
+
+    try {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false; // Android 上連續模式可能不穩定，改為單次識別
+      recognitionRef.current.lang = navigator.language || "zh-CN"; // 動態設置語言，備用 zh-CN
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.maxAlternatives = 1;
+
+      recognitionRef.current.onresult = (event) => {
+        const item = event.results[0];
+        console.info(`Result received: ${item[0].transcript} (Confidence: ${item[0].confidence})`);
+        contentChange?.(item[0].transcript);
+        if (item.isFinal) {
+          recognitionRef.current?.stop();
+          onSubmit?.(item[0].transcript);
+        }
+      };
+
+      recognitionRef.current.onstart = () => {
+        console.log("Speech recognition started");
+        setPlay(true);
+        setError(null);
+        onStatusChange?.(MicrophoneStatus.Listening);
+      };
+
+      recognitionRef.current.onend = () => {
+        console.log("Speech recognition ended");
+        setPlay(false);
+        onStatusChange?.(MicrophoneStatus.StopListening);
+        onStopPlay?.();
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error(`Speech recognition error: ${event.error}`);
+        setPlay(false);
+        if (event.error === "not-allowed") {
+          setError("麥克風權限被拒絕，請檢查瀏覽器設定");
+        } else if (event.error === "network") {
+          setError("網路問題，請檢查您的網路連線");
+        } else {
+          setError(`語音識別錯誤：${event.error}`);
+        }
+        onStatusChange?.(MicrophoneStatus.Error);
+      };
+
+      recognitionRef.current.start();
+    } catch (err) {
+      console.error("Failed to start speech recognition:", err);
+      setError("無法啟動語音識別，請稍後重試");
+      onStatusChange?.(MicrophoneStatus.Error);
+    }
+  };
+
+  const stopPlay = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setPlay(false);
+      onStopPlay?.();
+    }
+  };
+
+  return (
+    <div className="w-full">
+      <button
+        className="w-full p-1 flex flex-row justify-center bg-default-100 items-center gap-4 overflow-hidden color-inherit subpixel-antialiased rounded-md bg-background/10 backdrop-blur backdrop-saturate-150"
+        onClick={play ? stopPlay : startPlay}
+        disabled={!SpeechRecognition}
+      >
+        <Microphone fontSize={28} color={play ? "#1f94ea" : "white"} />
+        <Wave play={play} />
+      </button>
+      {error && (
+        <p className="text-red-500 text-sm mt-2 text-center">{error}</p>
+      )}
+    </div>
+  );
+}
