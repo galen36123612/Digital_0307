@@ -533,9 +533,26 @@ export default function MicrophoneInput({
   // 檢查麥克風權限
   const checkMicrophonePermission = async (): Promise<boolean> => {
     try {
-      const permissionStatus = await navigator.permissions.query({ name: "microphone" });
-      return permissionStatus.state === "granted";
-    } catch {
+      // 檢查 Permissions API 是否支援
+      if (navigator.permissions && navigator.permissions.query) {
+        const permissionStatus = await navigator.permissions.query({
+          name: "microphone" as PermissionName, // Type assertion to bypass TypeScript error
+        });
+        return permissionStatus.state === "granted";
+      } else {
+        // Fallback: 嘗試使用 getUserMedia 檢查麥克風權限
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          // 如果成功獲取流，立即關閉
+          stream.getTracks().forEach((track) => track.stop());
+          return true;
+        } catch (err) {
+          console.error("getUserMedia error:", err);
+          return false;
+        }
+      }
+    } catch (err) {
+      console.error("Permission query error:", err);
       return false;
     }
   };
