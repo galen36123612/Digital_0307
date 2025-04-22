@@ -1,5 +1,5 @@
 // this is origonal version
-/*import { useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import Wave from "./Wave";
 import { Microphone } from "@phosphor-icons/react";
@@ -85,7 +85,7 @@ export default function MicrophoneInput({
       <Wave play={play} />
     </button>
   );
-}*/
+}
 
 // 0311 多國語言測試
 /*import { useRef, useState, useEffect } from "react";
@@ -269,7 +269,7 @@ export default function MicrophoneInput({
 }*/
 
 // 0422 micorphone for android 
-import { useRef, useState, useEffect } from "react";
+/*import { useRef, useState, useEffect } from "react";
 import Wave from "./Wave";
 import { Microphone } from "@phosphor-icons/react";
 
@@ -494,4 +494,4 @@ export default function MicrophoneInput({
       </button>
     </div>
   );
-}
+}*/
