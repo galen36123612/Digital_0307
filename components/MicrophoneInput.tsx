@@ -274,8 +274,10 @@ import Wave from "./Wave";
 import { Microphone } from "@phosphor-icons/react";
 
 export enum MicrophoneStatus {
+  Idle,
   Listening,
-  stopListening
+  StopListening,
+  Error
 }
 
 interface MicrophoneInputProps {
@@ -286,15 +288,6 @@ interface MicrophoneInputProps {
   onStatusChange?: (status: MicrophoneStatus) => void;
 }
 
-// 定义类型，确保 TypeScript 能识别 SpeechRecognition
-type SpeechRecognitionType = any;
-
-// 保持原始声明方式的兼容性
-const SpeechRecognition = 
-  (globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition) as {
-    new(): SpeechRecognitionType;
-  };
-
 export default function MicrophoneInput({
   talking = false,
   contentChange,
@@ -302,191 +295,155 @@ export default function MicrophoneInput({
   onStopPlay,
   onStatusChange
 }: MicrophoneInputProps) {
-  const firstflag = useRef(true);
-  let recognition = useRef<SpeechRecognitionType | null>(null);
+  const recognitionRef = useRef<any>(null);
   const [play, setPlay] = useState<boolean>(false);
-  const [transcript, setTranscript] = useState<string>("");
-  const [isAndroid, setIsAndroid] = useState<boolean>(false);
-  const restartTimeoutRef = useRef<number | null>(null);
-  
-  // 检测是否为 Android 设备
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+
+  // 检查浏览器是否支持语音识别
   useEffect(() => {
-    const userAgent = navigator.userAgent || "";
-    setIsAndroid(/android/i.test(userAgent));
-  }, []);
-  
-  // 清理资源
-  useEffect(() => {
-    return () => {
-      if (restartTimeoutRef.current) {
-        window.clearTimeout(restartTimeoutRef.current);
-      }
-      if (recognition.current) {
-        try {
-          recognition.current.stop();
-        } catch (e) {
-          console.error("清理资源时停止识别失败:", e);
-        }
-      }
-    };
+    const SpeechRecognition = 
+      window.SpeechRecognition || 
+      window.webkitSpeechRecognition || 
+      null;
+    
+    if (!SpeechRecognition) {
+      setErrorMessage('您的浏览器不支持语音识别功能');
+    }
   }, []);
 
-  const handlerStop = () => {
-    if (recognition.current) {
-      try {
-        recognition.current.stop();
-      } catch (e) {
-        console.error("停止识别失败:", e);
-      }
+  // 请求麦克风权限
+  const requestMicrophonePermission = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // 获取权限后立即停止使用麦克风
+      stream.getTracks().forEach(track => track.stop());
+      setHasPermission(true);
+      return true;
+    } catch (error) {
+      console.error('麦克风权限被拒绝:', error);
+      setHasPermission(false);
+      setErrorMessage('请允许访问麦克风以使用语音功能');
+      onStatusChange && onStatusChange(MicrophoneStatus.Error);
+      return false;
     }
-    if (restartTimeoutRef.current) {
-      window.clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
+  };
+
+  const handlerStop = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
     }
     setPlay(false);
     onStopPlay && onStopPlay();
   };
 
-  const startPlay = () => {
+  const startPlay = async () => {
     if (play) return;
     
-    try {
-      recognition.current = new SpeechRecognition();
-      
-      // 针对 Android 设备的特殊配置
-      recognition.current.continuous = true;
-      recognition.current.lang = isAndroid ? "zh-CN" : "zh";
-      recognition.current.interimResults = true;
-      recognition.current.maxAlternatives = 1;
-      
-      recognition.current.onresult = function(event) {
-        if (event.results.length > 0) {
-          const item = event.results[0];
-          const currentTranscript = item[0].transcript;
-          console.info(
-            "识别结果: " + currentTranscript + " ." + item[0].confidence,
-          );
-          
-          setTranscript(currentTranscript);
-          contentChange && contentChange(currentTranscript);
-          
-          // 如果不是 Android 设备，或者结果是最终结果，则提交
-          if (item.isFinal && !isAndroid) {
-            try {
-              if (recognition.current) {
-                recognition.current.stop();
-              }
-              onSubmit && onSubmit(currentTranscript);
-            } catch (e) {
-              console.error("停止识别失败:", e);
-            }
-          }
-        }
-      };
-      
-      recognition.current.onstart = function() {
-        console.log("识别开始");
-        onStatusChange && onStatusChange(MicrophoneStatus.Listening);
-      };
-      
-      recognition.current.onend = function() {
-        console.log("识别结束");
-        
-        // 在 Android 设备上，如果有识别文本并且用户没有手动停止，提交结果
-        if (isAndroid && play && transcript) {
-          onSubmit && onSubmit(transcript);
-        }
-        
-        onStatusChange && onStatusChange(MicrophoneStatus.stopListening);
-        
-        // 如果是 Android 设备且仍在播放状态，则尝试重新启动识别
-        // 这解决了 Android 上过早停止识别的问题
-        if (isAndroid && play) {
-          restartTimeoutRef.current = window.setTimeout(() => {
-            try {
-              console.log("在 Android 设备上重新启动识别");
-              recognition.current = new SpeechRecognition();
-              
-              if (recognition.current) {
-                recognition.current.continuous = true;
-                recognition.current.lang = "zh-CN";
-                recognition.current.interimResults = true;
-                recognition.current.maxAlternatives = 1;
-                
-                // 重新绑定所有事件处理器
-                startPlay();
-              }
-            } catch (e) {
-              console.error("重新启动识别失败:", e);
-              setPlay(false);
-            }
-          }, 300);
-        } else {
-          setPlay(false);
-        }
-      };
-      
-      // 对于 Android 设备，不设置 onspeechend 处理器
-      // 这可以防止过早结束识别
-      if (!isAndroid) {
-        recognition.current.onspeechend = function() {
-          if (recognition.current) {
-            recognition.current.stop();
-          }
-        };
-      }
-      
-      recognition.current.onerror = function(event) {
-        console.error("识别错误: " + event.error);
-        
-        // 处理 Android 上常见的 "no-speech" 错误
-        if (isAndroid && event.error === "no-speech" && play) {
-          console.log("忽略 no-speech 错误并重新启动");
-          
-          if (restartTimeoutRef.current) {
-            window.clearTimeout(restartTimeoutRef.current);
-          }
-          
-          restartTimeoutRef.current = window.setTimeout(() => {
-            try {
-              startPlay();
-            } catch (e) {
-              console.error("重新启动识别失败:", e);
-              setPlay(false);
-            }
-          }, 500);
-          
-          return;
-        }
-        
-        setPlay(false);
-      };
-      
-      recognition.current.start();
+    // 如果未检查权限，先请求权限
+    if (hasPermission === null) {
+      const granted = await requestMicrophonePermission();
+      if (!granted) return;
+    } else if (hasPermission === false) {
+      // 如果已经拒绝过权限，提示用户
+      setErrorMessage('请在浏览器设置中允许访问麦克风');
+      return;
+    }
+
+    // 清除可能的错误信息
+    setErrorMessage('');
+
+    const SpeechRecognition = 
+      window.SpeechRecognition || 
+      window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      setErrorMessage('您的浏览器不支持语音识别功能');
+      return;
+    }
+
+    // 创建新的语音识别实例
+    recognitionRef.current = new SpeechRecognition();
+    
+    // 配置语音识别
+    recognitionRef.current.continuous = true;
+    recognitionRef.current.interimResults = true;
+    recognitionRef.current.maxAlternatives = 1;
+    
+    // 根据设备优化语言设置
+    // 对于中文识别，可以尝试不同的语言代码
+    recognitionRef.current.lang = "zh-CN"; // 尝试标准普通话
+    // 如果识别效果不佳，可以尝试其他方言代码：
+    // recognitionRef.current.lang = "zh-HK"; // 香港粤语
+    // recognitionRef.current.lang = "zh-TW"; // 台湾中文
+    
+    // 设置事件处理器
+    recognitionRef.current.onstart = () => {
+      console.log("语音识别已启动");
       setPlay(true);
-      setTranscript("");
+      onStatusChange && onStatusChange(MicrophoneStatus.Listening);
+    };
+
+    recognitionRef.current.onresult = (event) => {
+      const results = event.results;
+      if (results.length > 0) {
+        const item = results[results.length - 1];
+        const transcript = item[0].transcript;
+        
+        console.info(
+          "收到识别结果: " + transcript + " (置信度: " + item[0].confidence + ")"
+        );
+        
+        contentChange && contentChange(transcript);
+        
+        if (item.isFinal) {
+          if (onSubmit) {
+            onSubmit(transcript);
+            handlerStop();
+          }
+        }
+      }
+    };
+
+    recognitionRef.current.onend = () => {
+      console.log("语音识别已结束");
+      setPlay(false);
+      onStatusChange && onStatusChange(MicrophoneStatus.StopListening);
+    };
+
+    recognitionRef.current.onerror = (event) => {
+      console.error("语音识别错误: ", event.error);
+      setErrorMessage(`语音识别出错: ${event.error}`);
+      setPlay(false);
+      onStatusChange && onStatusChange(MicrophoneStatus.Error);
+    };
+
+    // 启动语音识别
+    try {
+      recognitionRef.current.start();
     } catch (error) {
       console.error("启动语音识别失败:", error);
+      setErrorMessage('启动语音识别失败');
       setPlay(false);
     }
   };
 
   return (
-    <button
-      className="w-full p-1 flex flex-row justify-center bg-default-100 items-center gap-4 overflow-hidden color-inherit subpixel-antialiased rounded-md bg-background/10 backdrop-blur backdrop-saturate-150"
-      onClick={play ? handlerStop : startPlay}
-    >
-      <Microphone fontSize={28} color={play ? "#1f94ea" : "white"} />
-      <Wave play={play} />
-      {play && isAndroid && <span className="text-xs text-blue-300">正在收音...</span>}
-    </button>
+    <div className="w-full">
+      {errorMessage && (
+        <div className="text-red-500 text-sm mb-2 text-center">
+          {errorMessage}
+        </div>
+      )}
+      <button
+        className="w-full p-1 flex flex-row justify-center bg-default-100 items-center gap-4 overflow-hidden color-inherit subpixel-antialiased rounded-md bg-background/10 backdrop-blur backdrop-saturate-150"
+        onClick={play ? handlerStop : startPlay}
+        disabled={!!errorMessage && errorMessage.includes('不支持')}
+      >
+        <Microphone fontSize={28} color={play ? "#1f94ea" : "white"} />
+        <Wave play={play} />
+        <span className="ml-2">{play ? "点击停止" : "点击开始语音输入"}</span>
+      </button>
+    </div>
   );
-}
-
-// 添加 TypeScript 类型声明兼容性
-declare global {
-  interface Window {
-    SpeechRecognition?: any;
-    webkitSpeechRecognition?: any;
-  }
 }
