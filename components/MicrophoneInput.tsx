@@ -347,8 +347,8 @@ export default function MicrophoneInput({
 
       recognition.current = new SpeechRecognition();
       
-      // 检测设备类型和默认语言
-      const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      // 检测设备类型
+      const userAgent = navigator.userAgent || navigator.vendor || "";
       const isAndroid = /android/i.test(userAgent);
       
       recognition.current.continuous = true;
@@ -456,5 +456,9 @@ declare global {
     webkitSpeechRecognition?: any;
     mozSpeechRecognition?: any;
     msSpeechRecognition?: any;
+  }
+  
+  interface Navigator {
+    vendor: string;
   }
 }
