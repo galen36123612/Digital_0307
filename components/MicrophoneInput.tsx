@@ -288,6 +288,58 @@ interface MicrophoneInputProps {
   onStatusChange?: (status: MicrophoneStatus) => void;
 }
 
+// 定义 SpeechRecognition 相关的接口
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+
+interface SpeechRecognitionResultList {
+  length: number;
+  item(index: number): SpeechRecognitionResult;
+  [index: number]: SpeechRecognitionResult;
+}
+
+interface SpeechRecognitionResult {
+  length: number;
+  item(index: number): SpeechRecognitionAlternative;
+  [index: number]: SpeechRecognitionAlternative;
+  isFinal: boolean;
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+// 扩展 Window 接口以包含 SpeechRecognition
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognition;
+    webkitSpeechRecognition?: new () => SpeechRecognition;
+  }
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onstart: (event: Event) => void;
+  onend: (event: Event) => void;
+  onerror: (event: SpeechRecognitionErrorEvent) => void;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onspeechend: (event: Event) => void;
+}
+
 export default function MicrophoneInput({
   talking = false,
   contentChange,
@@ -295,25 +347,25 @@ export default function MicrophoneInput({
   onStopPlay,
   onStatusChange
 }: MicrophoneInputProps) {
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const [play, setPlay] = useState<boolean>(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   // 检查浏览器是否支持语音识别
   useEffect(() => {
-    const SpeechRecognition = 
+    const SpeechRecognitionAPI = 
       window.SpeechRecognition || 
       window.webkitSpeechRecognition || 
       null;
     
-    if (!SpeechRecognition) {
+    if (!SpeechRecognitionAPI) {
       setErrorMessage('您的浏览器不支持语音识别功能');
     }
   }, []);
 
   // 请求麦克风权限
-  const requestMicrophonePermission = async () => {
+  const requestMicrophonePermission = async (): Promise<boolean> => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       // 获取权限后立即停止使用麦克风
@@ -329,7 +381,7 @@ export default function MicrophoneInput({
     }
   };
 
-  const handlerStop = () => {
+  const handlerStop = (): void => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
@@ -337,7 +389,7 @@ export default function MicrophoneInput({
     onStopPlay && onStopPlay();
   };
 
-  const startPlay = async () => {
+  const startPlay = async (): Promise<void> => {
     if (play) return;
     
     // 如果未检查权限，先请求权限
@@ -353,17 +405,17 @@ export default function MicrophoneInput({
     // 清除可能的错误信息
     setErrorMessage('');
 
-    const SpeechRecognition = 
+    const SpeechRecognitionAPI = 
       window.SpeechRecognition || 
       window.webkitSpeechRecognition;
     
-    if (!SpeechRecognition) {
+    if (!SpeechRecognitionAPI) {
       setErrorMessage('您的浏览器不支持语音识别功能');
       return;
     }
 
     // 创建新的语音识别实例
-    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current = new SpeechRecognitionAPI();
     
     // 配置语音识别
     recognitionRef.current.continuous = true;
@@ -371,20 +423,16 @@ export default function MicrophoneInput({
     recognitionRef.current.maxAlternatives = 1;
     
     // 根据设备优化语言设置
-    // 对于中文识别，可以尝试不同的语言代码
     recognitionRef.current.lang = "zh-CN"; // 尝试标准普通话
-    // 如果识别效果不佳，可以尝试其他方言代码：
-    // recognitionRef.current.lang = "zh-HK"; // 香港粤语
-    // recognitionRef.current.lang = "zh-TW"; // 台湾中文
     
     // 设置事件处理器
-    recognitionRef.current.onstart = () => {
+    recognitionRef.current.onstart = (event: Event): void => {
       console.log("语音识别已启动");
       setPlay(true);
       onStatusChange && onStatusChange(MicrophoneStatus.Listening);
     };
 
-    recognitionRef.current.onresult = (event) => {
+    recognitionRef.current.onresult = (event: SpeechRecognitionEvent): void => {
       const results = event.results;
       if (results.length > 0) {
         const item = results[results.length - 1];
@@ -405,13 +453,13 @@ export default function MicrophoneInput({
       }
     };
 
-    recognitionRef.current.onend = () => {
+    recognitionRef.current.onend = (event: Event): void => {
       console.log("语音识别已结束");
       setPlay(false);
       onStatusChange && onStatusChange(MicrophoneStatus.StopListening);
     };
 
-    recognitionRef.current.onerror = (event) => {
+    recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent): void => {
       console.error("语音识别错误: ", event.error);
       setErrorMessage(`语音识别出错: ${event.error}`);
       setPlay(false);
